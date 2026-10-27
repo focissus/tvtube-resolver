@@ -29,8 +29,10 @@ if os.environ.get("COOKIES_B64"):
 
 def _opts(client):
     o = dict(YDL)
+    args = {"youtubepot-bgutilhttp": {"base_url": ["http://127.0.0.1:4416"]}}
     if client:
-        o["extractor_args"] = {"youtube": {"player_client": client}}
+        args["youtube"] = {"player_client": client}
+    o["extractor_args"] = args
     if os.path.exists(COOKIES):
         o["cookiefile"] = COOKIES
     return o
