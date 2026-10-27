@@ -22,9 +22,13 @@ YDL = {"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout":
 CLIENTS = [None, ["android_vr"], ["ios"], ["mweb"], ["web_safari"], ["tv"], ["android"]]
 
 COOKIES = "/tmp/cookies.txt"
-if os.environ.get("COOKIES_B64"):
+_cookie_b64 = os.environ.get("COOKIES_B64", "").strip()
+if len(_cookie_b64) > 20:
     import base64
-    Path(COOKIES).write_bytes(base64.b64decode(os.environ["COOKIES_B64"]))
+    try:
+        Path(COOKIES).write_bytes(base64.b64decode(_cookie_b64))
+    except Exception:
+        pass
 
 
 def _opts(client):
