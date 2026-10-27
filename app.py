@@ -54,6 +54,24 @@ def cleanup():
             pass
 
 
+# Render gói free ngủ sau 15 phút không có truy cập. Tự gọi chính mình mỗi 5 phút để giữ thức.
+SELF_URL = os.environ.get("RENDER_EXTERNAL_URL", "").rstrip("/")
+
+
+def _keep_awake():
+    import urllib.request, time as _t
+    while SELF_URL:
+        _t.sleep(300)
+        try:
+            urllib.request.urlopen(SELF_URL + "/health", timeout=30).read()
+        except Exception:
+            pass
+
+
+if SELF_URL:
+    threading.Thread(target=_keep_awake, daemon=True).start()
+
+
 @app.get("/health")
 def health():
     return {"ok": True, "cache_files": len(list(CACHE.glob("*.mp4")))}
