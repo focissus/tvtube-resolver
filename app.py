@@ -23,12 +23,15 @@ CLIENTS = [None, ["android_vr"], ["ios"], ["mweb"], ["web_safari"], ["tv"], ["an
 
 COOKIES = "/tmp/cookies.txt"
 _cookie_b64 = os.environ.get("COOKIES_B64", "").strip()
+_cookie_txt = os.environ.get("COOKIES_TXT", "").replace("\\n", "\n").strip()
 if len(_cookie_b64) > 20:
     import base64
     try:
         Path(COOKIES).write_bytes(base64.b64decode(_cookie_b64))
     except Exception:
         pass
+elif len(_cookie_txt) > 50:
+    Path(COOKIES).write_text(_cookie_txt + "\n", encoding="utf-8")
 
 
 def _opts(client):
