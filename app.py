@@ -17,6 +17,23 @@ FORMAT = (
     f"/b[height<={TARGET_H}][ext=mp4][vcodec~='avc1']"
 )
 YDL = {"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": 25, "retries": 3}
+
+# IP trung tâm dữ liệu hay bị YouTube nghi ngờ, nên thử lần lượt nhiều kiểu máy khách.
+CLIENTS = [None, ["android_vr"], ["ios"], ["mweb"], ["web_safari"], ["tv"], ["android"]]
+
+COOKIES = "/tmp/cookies.txt"
+if os.environ.get("COOKIES_B64"):
+    import base64
+    Path(COOKIES).write_bytes(base64.b64decode(os.environ["COOKIES_B64"]))
+
+
+def _opts(client):
+    o = dict(YDL)
+    if client:
+        o["extractor_args"] = {"youtube": {"player_client": client}}
+    if os.path.exists(COOKIES):
+        o["cookiefile"] = COOKIES
+    return o
 _lock = threading.Lock()
 app = FastAPI(title="TVTube resolver")
 
@@ -70,20 +87,49 @@ def resolve(request: Request, id: str):
         with _lock:
             if not (out.exists() and out.stat().st_size > 0):
                 tmp = CACHE / (safe(id) + ".part.mp4")
-                opts = dict(YDL)
-                opts.update({"format": FORMAT, "merge_output_format": "mp4", "outtmpl": str(tmp),
-                             "postprocessor_args": {"remuxer": ["-movflags", "+faststart"]}})
-                try:
-                    with yt_dlp.YoutubeDL(opts) as ydl:
-                        ydl.download([f"https://www.youtube.com/watch?v={id}"])
-                except Exception as e:
-                    raise HTTPException(502, f"Không lấy được luồng: {str(e)[:120]}")
+                last = ""
+                for client in CLIENTS:
+                    opts = _opts(client)
+                    opts.update({"format": FORMAT, "merge_output_format": "mp4", "outtmpl": str(tmp),
+                                 "postprocessor_args": {"remuxer": ["-movflags", "+faststart"]}})
+                    try:
+                        with yt_dlp.YoutubeDL(opts) as ydl:
+                            ydl.download([f"https://www.youtube.com/watch?v={id}"])
+                        if tmp.exists() and tmp.stat().st_size > 0:
+                            break
+                    except Exception as e:
+                        last = str(e)[:120]
+                        try:
+                            if tmp.exists():
+                                tmp.unlink()
+                        except OSError:
+                            pass
+                else:
+                    raise HTTPException(502, "Không lấy được luồng: " + last)
                 if not tmp.exists():
                     raise HTTPException(502, "Không tải được luồng video")
                 tmp.rename(out)
                 cleanup()
     host = request.headers.get("host", request.url.netloc)
     return {"url": f"https://{host}/media/{out.name}", "quality": f"{TARGET_H}p", "mime": "video/mp4"}
+
+
+@app.get("/api/debug")
+def debug(id: str = "apONtL8FHQU"):
+    """Cho biết kiểu kết nối nào tải được video này (dùng khi YouTube chặn IP)."""
+    res = []
+    for client in CLIENTS:
+        try:
+            opts = _opts(client)
+            opts.update({"skip_download": True, "format": FORMAT})
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(f"https://www.youtube.com/watch?v={id}", download=False)
+            fmts = info.get("requested_formats") or info.get("formats") or []
+            res.append({"client": client or "default", "ok": True,
+                        "formats": len(fmts), "height": info.get("height")})
+        except Exception as e:
+            res.append({"client": client or "default", "ok": False, "err": str(e)[:90]})
+    return {"results": res}
 
 
 @app.get("/media/{name}")
