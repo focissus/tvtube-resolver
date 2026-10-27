@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: tvtube-resolver
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: TVTUBE_PORT
+        value: "10000"
+      - key: TVTUBE_CACHE_GB
+        value: "4"
