@@ -14,7 +14,10 @@ MAX_GB = float(os.environ.get("TVTUBE_CACHE_GB", "4"))
 
 FORMAT = (
     f"bv*[vcodec~='avc1'][height<={TARGET_H}][fps<={TARGET_FPS}]+ba[acodec~='mp4a']"
-    f"/b[height<={TARGET_H}][ext=mp4][vcodec~='avc1']"
+    f"/bv*[vcodec~='avc1'][height<={TARGET_H}]+ba[acodec~='mp4a']"
+    f"/bv*[height<={TARGET_H}]+ba"
+    f"/b[height<={TARGET_H}]"
+    f"/b"
 )
 YDL = {"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": 25, "retries": 3}
 
@@ -139,6 +142,26 @@ def resolve(request: Request, id: str):
                 cleanup()
     host = request.headers.get("host", request.url.netloc)
     return {"url": f"https://{host}/media/{out.name}", "quality": f"{TARGET_H}p", "mime": "video/mp4"}
+
+
+@app.get("/api/formats")
+def formats(id: str = "apONtL8FHQU"):
+    out = []
+    for client in CLIENTS:
+        try:
+            opts = _opts(client)
+            opts.update({"skip_download": True})
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(f"https://www.youtube.com/watch?v={id}", download=False)
+            for f in info.get("formats", []):
+                out.append({"client": client or "default", "id": f.get("format_id"),
+                            "h": f.get("height"), "v": f.get("vcodec"), "a": f.get("acodec"),
+                            "fps": f.get("fps"), "proto": f.get("protocol")})
+            if out:
+                break
+        except Exception as e:
+            out.append({"client": client or "default", "err": str(e)[:70]})
+    return {"count": len(out), "formats": out[:40]}
 
 
 @app.get("/api/debug")
