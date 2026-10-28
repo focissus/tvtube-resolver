@@ -2,13 +2,10 @@ package com.ally.tvtube;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.media.AudioManager;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.KeyEvent;
-import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
@@ -17,45 +14,36 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.android.exoplayer2.DefaultLoadControl;
-import com.google.android.exoplayer2.DefaultRenderersFactory;
-import com.google.android.exoplayer2.ExoPlayer;
-import com.google.android.exoplayer2.MediaItem;
-import com.google.android.exoplayer2.PlaybackException;
-import com.google.android.exoplayer2.Player;
-import com.google.android.exoplayer2.source.MediaSource;
-import com.google.android.exoplayer2.source.MergingMediaSource;
-import com.google.android.exoplayer2.source.ProgressiveMediaSource;
-import com.google.android.exoplayer2.upstream.DefaultHttpDataSource;
-
-/** Trinh phat dung ExoPlayer: phat hai luong roi (hinh + tieng), khong can ghep. */
+/**
+ * Trinh phat dung ExoPlayer. Moi thu lien quan ExoPlayer nam trong ExoEngine;
+ * Activity chi giu kieu Engine (khong phai kieu thu vien) nen loi nap lop
+ * khong lam chet Activity.
+ */
 public class ExoPlayerActivity extends Activity {
 
-    private ExoPlayer player;
-    private SurfaceView surfaceView;
-    private TextView txtTitle, txtTime, txtLoading;
+    private Engine engine;
+    private String videoId, title;
+    private TextView txtTime, txtLoading, txtTitle;
     private SeekBar seekBar;
     private ImageButton btnPlay;
-    private View overlay;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private String videoId, title;
     private boolean fallingBack = false;
-    private int ioRetries = 0;
+    private int resumeMs = 0;
 
     private final Runnable tick = new Runnable() {
         public void run() {
-            if (player != null) {
-                try {
-                    long pos = player.getCurrentPosition();
-                    long dur = player.getDuration();
-                    if (dur > 0) {
-                        if (seekBar.getMax() != (int) dur) seekBar.setMax((int) dur);
-                        seekBar.setProgress((int) pos);
-                        txtTime.setText(fmt(pos) + " / " + fmt(dur));
-                    }
-                    btnPlay.setImageResource(player.isPlaying()
+            if (engine != null) {
+                int dur = engine.duration();
+                int pos = engine.position();
+                if (dur > 0) {
+                    if (seekBar.getMax() != dur) seekBar.setMax(dur);
+                    if (!seekBar.isPressed()) seekBar.setProgress(pos);
+                    if (txtTime != null) txtTime.setText(fmt(pos) + " / " + fmt(dur));
+                }
+                if (btnPlay != null) {
+                    btnPlay.setImageResource(engine.isPlaying()
                             ? R.drawable.ic_media_pause : R.drawable.ic_media_play);
-                } catch (Exception ignored) {}
+                }
             }
             handler.postDelayed(this, 500);
         }
@@ -67,247 +55,120 @@ public class ExoPlayerActivity extends Activity {
         Crash.install(this);
         try {
             buildUi();
+            load();
         } catch (Throwable t) {
-            // khong de chet app vi ExoPlayer
-            Toast.makeText(this, "Không mở được trình phát, chuyển bản nhẹ", Toast.LENGTH_LONG).show();
-            Intent i = new Intent(this, PlayerActivity.class);
-            i.putExtra("id", getIntent().getStringExtra("id"));
-            i.putExtra("title", getIntent().getStringExtra("title"));
-            i.putExtra("posMs", getIntent().getIntExtra("posMs", 0));
-            startActivity(i);
-            finish();
+            fallback("Không mở được trình phát");
         }
     }
 
     private void buildUi() {
         setContentView(R.layout.activity_player);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
         videoId = getIntent().getStringExtra("id");
         title = getIntent().getStringExtra("title");
-        int resume = getIntent().getIntExtra("posMs", 0);
+        resumeMs = getIntent().getIntExtra("posMs", 0);
 
-        surfaceView = (SurfaceView) findViewById(R.id.surfaceView);
         txtTitle = (TextView) findViewById(R.id.txtTitle);
         txtTime = (TextView) findViewById(R.id.txtTime);
         txtLoading = (TextView) findViewById(R.id.txtLoading);
         seekBar = (SeekBar) findViewById(R.id.seek);
         btnPlay = (ImageButton) findViewById(R.id.btnPlay);
-        overlay = findViewById(R.id.content);
-
         if (txtTitle != null && title != null) txtTitle.setText(title);
         if (txtLoading != null) txtLoading.setText("Đang kết nối…");
-        seekBar.setFocusable(false);
-
-        btnPlay.setOnClickListener(new View.OnClickListener() {
+        if (seekBar != null) seekBar.setFocusable(false);
+        if (btnPlay != null) btnPlay.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { toggle(); }
         });
-
-        if (resume > 3000) {
-            seekBar.setProgress(resume);
-        }
-        new Thread(new Runnable() {
-            public void run() { load(); }
-        }).start();
-        handler.post(tick);
     }
 
     private void load() {
-        final Api.Pair p;
-        try {
-            p = Api.streams(this, videoId);
-        } catch (Exception e) {
-            fallback(e.getMessage());
-            return;
-        }
-        if (p == null) {
-            fallback("Máy chủ chưa hỗ trợ chế độ hai luồng");
-            return;
-        }
-        runOnUiThread(new Runnable() {
+        new Thread(new Runnable() {
             public void run() {
-                if (isFinishing() || isDestroyed() || player != null) return;
-                startExo(p);
+                Api.Pair p = null;
+                String err = null;
+                try {
+                    p = Api.streams(getApplicationContext(), videoId);
+                } catch (Throwable t) {
+                    err = t.getMessage();
+                }
+                final Api.Pair pair = p;
+                final String error = err;
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        if (isFinishing() || isDestroyed()) return;
+                        if (pair == null) {
+                            fallback(error != null ? error : "Máy chủ chưa hỗ trợ hai luồng");
+                            return;
+                        }
+                        startEngine(pair);
+                    }
+                });
             }
-        });
+        }).start();
     }
 
-    private void startExo(Api.Pair p) {
+    private void startEngine(Api.Pair pair) {
         try {
-            android.app.ActivityManager am = (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
-            int memClass = am != null ? am.getMemoryClass() : 64;
-            if (memClass < 48) { fallback("RAM quá thấp"); return; }
-
-            int targetBytes = memClass <= 64 ? 6 * 1024 * 1024 : 8 * 1024 * 1024;
-            int maxMs = memClass <= 64 ? 10000 : 15000;
-
-            DefaultLoadControl lc = new DefaultLoadControl.Builder()
-                    .setBufferDurationsMs(5000, maxMs, 1000, 2000)
-                    .setTargetBufferBytes(targetBytes)
-                    .setPrioritizeTimeOverSizeThresholds(false)
-                    .setBackBuffer(0, false)
-                    .build();
-
-            DefaultRenderersFactory rf = new DefaultRenderersFactory(this)
-                    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
-                    .setEnableDecoderFallback(true)
-                    .setEnableAudioFloatOutput(false)
-                    .setEnableAudioTrackPlaybackParams(false);
-
-            com.google.android.exoplayer2.trackselection.DefaultTrackSelector ts =
-                    new com.google.android.exoplayer2.trackselection.DefaultTrackSelector(this);
-            ts.setParameters(ts.buildUponParameters()
-                    .setMaxVideoSize(1280, 720)
-                    .setMaxVideoFrameRate(30)
-                    .setMaxVideoBitrate(4000000)
-                    .setForceHighestSupportedBitrate(false)
-                    .setExceedRendererCapabilitiesIfNecessary(false)
-                    .setAllowVideoMixedMimeTypeAdaptiveness(false)
-                    .setAllowVideoNonSeamlessAdaptiveness(false)
-                    .setAllowAudioMixedMimeTypeAdaptiveness(false)
-                    .setAllowAudioMixedSampleRateAdaptiveness(false)
-                    .setAllowAudioMixedChannelCountAdaptiveness(false)
-                    .build());
-
-            try {
-                player = new ExoPlayer.Builder(this, rf)
-                        .setLoadControl(lc)
-                        .setTrackSelector(ts)
-                        .build();
-            } catch (OutOfMemoryError oom) {
-                fallback("Thiếu bộ nhớ khi tạo ExoPlayer");
-                return;
-            }
-
-            try { player.setVideoChangeFrameRateStrategy(com.google.android.exoplayer2.C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF); } catch (Throwable ignored) {}
-            player.setWakeMode(com.google.android.exoplayer2.C.WAKE_MODE_NONE);
-            player.setForegroundMode(false);
-            player.setHandleAudioBecomingNoisy(false);
-            player.setVideoSurfaceView(surfaceView);
-            player.setAudioAttributes(new com.google.android.exoplayer2.audio.AudioAttributes.Builder()
-                    .setUsage(com.google.android.exoplayer2.C.USAGE_MEDIA)
-                    .setContentType(com.google.android.exoplayer2.C.AUDIO_CONTENT_TYPE_MOVIE)
-                    .build(), false);
-
-            java.util.Map<String, String> req = new java.util.HashMap<String, String>();
-            req.put("Accept-Encoding", "identity");
-            DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
-                    .setUserAgent("TVTube/1.0")
-                    .setConnectTimeoutMs(10000)
-                    .setReadTimeoutMs(20000)
-                    .setAllowCrossProtocolRedirects(false)
-                    .setDefaultRequestProperties(req);
-
-            MediaSource vs = new ProgressiveMediaSource.Factory(http)
-                    .createMediaSource(MediaItem.fromUri(Uri.parse(p.videoUrl)));
-            MediaSource as = new ProgressiveMediaSource.Factory(http)
-                    .createMediaSource(MediaItem.fromUri(Uri.parse(p.audioUrl)));
-
-            player.setMediaSource(new MergingMediaSource(vs, as), false);
-            player.addListener(new Player.Listener() {
-                public void onPlaybackStateChanged(int state) {
-                    if (state == Player.STATE_READY && txtLoading != null) {
-                        txtLoading.setVisibility(View.GONE);
-                    }
-                    if (state == Player.STATE_ENDED) finish();
+            engine = new ExoEngine(this, new ExoEngine.Callback() {
+                public void onReady() {
+                    if (txtLoading != null) txtLoading.setVisibility(View.GONE);
                 }
-                public void onPlayerError(PlaybackException error) {
-                    int code = error.errorCode;
-                    boolean net = code == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
-                            || code == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
-                            || code == PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE;
-                    if (net && ioRetries < 1) {
-                        ioRetries++;
-                        try {
-                            long pos = player.getCurrentPosition();
-                            player.prepare();
-                            player.seekTo(pos);
-                            player.setPlayWhenReady(true);
-                            return;
-                        } catch (Exception ignored) {}
-                    }
-                    fallback("ExoPlayer lỗi: " + error.getErrorCodeName());
+                public void onEnded() { finish(); }
+                public void onError(final String message) {
+                    runOnUiThread(new Runnable() {
+                        public void run() { fallback("ExoPlayer: " + message); }
+                    });
                 }
             });
-            player.prepare();
-            int resume = getIntent().getIntExtra("posMs", 0);
-            if (resume > 3000) player.seekTo(resume);
-            player.setPlayWhenReady(true);
+            SurfaceView sv = (SurfaceView) findViewById(R.id.surfaceView);
+            engine.setVideoSurfaceView(sv);
+            engine.start(pair.videoUrl, pair.audioUrl, resumeMs);
+            handler.post(tick);
         } catch (Throwable t) {
-            releasePlayer();
-            fallback("Không khởi động được ExoPlayer");
+            fallback("Máy không chạy được ExoPlayer");
         }
     }
 
-    @Override
-    public void onTrimMemory(int level) {
-        super.onTrimMemory(level);
-        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW && player != null) {
-            fallback("RAM thấp");
-        }
-    }
-
-    @Override
-    public void onLowMemory() {
-        super.onLowMemory();
-        if (player != null) fallback("Hết RAM");
-    }
-
-    private void fallback(final String why) {
-        if (isFinishing() || fallingBack) return;
+    private void fallback(String why) {
+        if (fallingBack || isFinishing()) return;
         fallingBack = true;
-        runOnUiThread(new Runnable() {
-            public void run() {
-                int resume = getIntent().getIntExtra("posMs", 0);
-                try {
-                    if (player != null) {
-                        long pos = player.getCurrentPosition();
-                        if (pos > 3000) resume = (int) pos;
-                    }
-                } catch (Throwable ignored) {}
-                releasePlayer();
-                Toast.makeText(ExoPlayerActivity.this, "Chuyển trình phát dự phòng", Toast.LENGTH_SHORT).show();
-                Intent i = new Intent(ExoPlayerActivity.this, PlayerActivity.class);
-                i.putExtra("id", videoId);
-                i.putExtra("title", title);
-                i.putExtra("posMs", resume);
-                startActivity(i);
-                finish();
-            }
-        });
-    }
-
-    private void releasePlayer() {
-        if (player != null) {
-            try { player.stop(); } catch (Exception ignored) {}
-            try { player.release(); } catch (Exception ignored) {}
-            player = null;
+        int pos = resumeMs;
+        try { if (engine != null && engine.position() > 3000) pos = engine.position(); } catch (Throwable ignored) {}
+        if (engine != null) {
+            try { engine.release(); } catch (Throwable ignored) {}
+            engine = null;
         }
+        Toast.makeText(this, "Chuyển trình phát dự phòng", Toast.LENGTH_SHORT).show();
+        Intent i = new Intent(this, PlayerActivity.class);
+        i.putExtra("id", videoId);
+        i.putExtra("title", title);
+        i.putExtra("posMs", pos);
+        startActivity(i);
+        finish();
     }
 
     private void toggle() {
-        if (player == null) return;
-        if (player.isPlaying()) player.pause();
-        else player.play();
+        if (engine == null) return;
+        if (engine.isPlaying()) engine.pause(); else engine.play();
     }
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (player != null) {
+        if (engine != null) {
             if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
                 toggle(); return true;
             }
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-                player.seekTo(Math.max(0, player.getCurrentPosition() - 10000)); return true;
+                engine.seekTo(Math.max(0, engine.position() - 10000)); return true;
             }
             if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                player.seekTo(player.getCurrentPosition() + 10000); return true;
+                engine.seekTo(engine.position() + 10000); return true;
             }
         }
         return super.onKeyDown(keyCode, event);
     }
 
-    private String fmt(long ms) {
+    private String fmt(int ms) {
         long s = Math.max(0, ms) / 1000;
         long h = s / 3600, m = (s % 3600) / 60, sec = s % 60;
         if (h > 0) return String.format("%d:%02d:%02d", h, m, sec);
@@ -317,13 +178,16 @@ public class ExoPlayerActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
-        if (player != null) player.pause();
+        if (engine != null) engine.pause();
     }
 
     @Override
     protected void onDestroy() {
         handler.removeCallbacks(tick);
-        releasePlayer();
+        if (engine != null) {
+            try { engine.release(); } catch (Throwable ignored) {}
+            engine = null;
+        }
         super.onDestroy();
     }
 }

@@ -59,6 +59,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Crash.install(this);
+        showLastCrash();
         setContentView(R.layout.activity_main);
 
         editSearch = (EditText) findViewById(R.id.editSearch);
@@ -685,6 +686,30 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         super.onDestroy();
+    }
+
+
+    /** Neu lan truoc app tung vang, hien noi dung tep loi de nguoi dung doc/gui di. */
+    private void showLastCrash() {
+        try {
+            java.io.File dir = getExternalFilesDir(null);
+            if (dir == null) return;
+            java.io.File f = new java.io.File(dir, "loi.txt");
+            if (!f.exists() || f.length() == 0) return;
+            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(
+                    new java.io.FileInputStream(f), "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            int n = 0;
+            while ((line = r.readLine()) != null && n < 40) { sb.append(line).append('\n'); n++; }
+            r.close();
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Lần trước app bị lỗi")
+                    .setMessage(sb.toString())
+                    .setPositiveButton("Đóng", null)
+                    .show();
+        } catch (Throwable ignored) {
+        }
     }
 
     private String normalizeUrl(String raw) {
