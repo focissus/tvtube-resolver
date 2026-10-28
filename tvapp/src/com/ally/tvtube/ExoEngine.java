@@ -27,17 +27,11 @@ import java.util.Map;
  */
 public class ExoEngine implements Engine {
 
-    public interface Callback {
-        void onReady();
-        void onEnded();
-        void onError(String message);
-    }
-
     private ExoPlayer player;
     private SurfaceView surface;
-    private final Callback cb;
+    private final EngineListener cb;
 
-    public ExoEngine(Context ctx, Callback cb) {
+    public ExoEngine(Context ctx, EngineListener cb) {
         this.cb = cb;
         android.app.ActivityManager am =
                 (android.app.ActivityManager) ctx.getSystemService(Context.ACTIVITY_SERVICE);

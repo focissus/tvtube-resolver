@@ -107,9 +107,10 @@ public class ExoPlayerActivity extends Activity {
         }).start();
     }
 
-    private void startEngine(Api.Pair pair) {
+    private void startEngine(final Api.Pair pair) {
         try {
-            engine = new ExoEngine(this, new ExoEngine.Callback() {
+            // Nạp động: Activity không tham chiếu tĩnh tới lớp ExoPlayer nào
+            EngineListener listener = new EngineListener() {
                 public void onReady() {
                     if (txtLoading != null) txtLoading.setVisibility(View.GONE);
                 }
@@ -119,7 +120,10 @@ public class ExoPlayerActivity extends Activity {
                         public void run() { fallback("ExoPlayer: " + message); }
                     });
                 }
-            });
+            };
+            Class<?> cls = Class.forName("com.ally.tvtube.ExoEngine");
+            engine = (Engine) cls.getConstructor(android.content.Context.class, EngineListener.class)
+                    .newInstance(this, listener);
             SurfaceView sv = (SurfaceView) findViewById(R.id.surfaceView);
             engine.setVideoSurfaceView(sv);
             engine.start(pair.videoUrl, pair.audioUrl, resumeMs);
