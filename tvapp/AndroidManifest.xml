@@ -32,6 +32,12 @@
         </activity>
 
         <activity
+            android:name="com.ally.tvtube.ExoPlayerActivity"
+            android:label="Đang phát"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|keyboardHidden|screenSize" />
+
+        <activity
             android:name="com.ally.tvtube.PlayerActivity"
             android:label="Đang phát"
             android:screenOrientation="landscape"

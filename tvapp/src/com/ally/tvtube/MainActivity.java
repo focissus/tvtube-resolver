@@ -640,7 +640,13 @@ public class MainActivity extends Activity {
         intent.putExtra("id", video.id);
         intent.putExtra("title", video.title);
         intent.putExtra("posMs", startPos);
-        startActivity(intent);
+        try {
+            startActivity(intent);
+        } catch (Throwable t) {
+            // phong khi Activity chua khai bao hoac hong: khong lam chet app
+            Toast.makeText(this, "Lỗi mở trình phát: " + t.getClass().getSimpleName(),
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     private void showServerDialog() {
