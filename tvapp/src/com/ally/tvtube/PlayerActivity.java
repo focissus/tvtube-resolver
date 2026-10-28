@@ -303,6 +303,7 @@ public class PlayerActivity extends Activity implements SurfaceHolder.Callback,
 
                         if (result != null && result.url != null && result.url.length() > 0) {
                             streamUrl = result.url;
+                            playUrl = result.url;      // bat buoc: onCompletion dua vao playUrl de biet dang phat doan ngan
                             prepareMediaPlayer();
                         } else {
                             String msg = err;
@@ -468,7 +469,8 @@ public class PlayerActivity extends Activity implements SurfaceHolder.Callback,
     @Override
     public void onCompletion(MediaPlayer mp) {
         // het doan ngan dau tien: cho tep day du roi chuyen tiep, khong thoat
-        if (!switched && playUrl != null && playUrl.indexOf(".fast.mp4") >= 0) {
+        String cur = playUrl != null ? playUrl : streamUrl;
+        if (!switched && cur != null && cur.indexOf(".fast.mp4") >= 0) {
             waitFullThenSwitch();
             return;
         }
@@ -711,7 +713,7 @@ public class PlayerActivity extends Activity implements SurfaceHolder.Callback,
         new Thread(new Runnable() {
             public void run() {
                 String full = fullUrl;
-                long deadline = System.currentTimeMillis() + 90000L;
+                long deadline = System.currentTimeMillis() + 300000L;  // doi tep day du toi 5 phut, khong thoat som
                 while (full == null && System.currentTimeMillis() < deadline && !resolveCancelled) {
                     try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
                     full = fullUrl;
