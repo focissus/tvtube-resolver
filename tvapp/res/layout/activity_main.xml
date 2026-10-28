@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg"
+    android:paddingLeft="42dp"
+    android:paddingRight="42dp"
+    android:paddingTop="18dp"
+    android:paddingBottom="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/txtLogo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="TVTube"
+            android:textColor="@color/textPrimary"
+            android:textSize="22sp"
+            android:layout_marginRight="20dp" />
+
+        <EditText
+            android:id="@+id/editSearch"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_input"
+            android:hint="Tìm video trên YouTube…"
+            android:textColorHint="@color/textMuted"
+            android:textColor="@color/textPrimary"
+            android:textSize="15sp"
+            android:singleLine="true"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp"
+            android:imeOptions="actionSearch"
+            android:inputType="text" />
+
+        <Button
+            android:id="@+id/btnSearch"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:layout_marginLeft="10dp"
+            android:text="Tìm"
+            android:textSize="15sp"
+            android:textColor="@color/textPrimary"
+            android:background="@drawable/bg_button"
+            android:paddingLeft="22dp"
+            android:paddingRight="22dp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/txtHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="Gõ từ khoá rồi bấm Tìm. Giữ nút Tìm để đổi địa chỉ máy chủ."
+        android:textColor="@color/textMuted"
+        android:textSize="12sp" />
+
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:scrollbars="none"
+        android:focusable="false">
+
+        <LinearLayout
+            android:id="@+id/chipRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button android:id="@+id/chip1" style="@style/Chip" android:text="Nhạc" />
+            <Button android:id="@+id/chip2" style="@style/Chip" android:text="Phim" />
+            <Button android:id="@+id/chip3" style="@style/Chip" android:text="Hoạt hình" />
+            <Button android:id="@+id/chip4" style="@style/Chip" android:text="Tin tức" />
+            <Button android:id="@+id/chip5" style="@style/Chip" android:text="Bóng đá" />
+            <Button android:id="@+id/chip6" style="@style/Chip" android:text="Học tập" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <TextView
+        android:id="@+id/txtStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textColor="@color/accent"
+        android:textSize="13sp" />
+
+    <GridView
+        android:id="@+id/grid"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="10dp"
+        android:numColumns="4"
+        android:horizontalSpacing="14dp"
+        android:verticalSpacing="16dp"
+        android:stretchMode="columnWidth"
+        android:listSelector="@android:color/transparent"
+        android:clipToPadding="false"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:descendantFocusability="blocksDescendants" />
+</LinearLayout>
